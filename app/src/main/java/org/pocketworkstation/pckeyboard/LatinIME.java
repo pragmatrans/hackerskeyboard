@@ -1472,6 +1472,23 @@ public class LatinIME extends InputMethodService implements
         }
     }
 
+    /**
+     * Long press on a suggestion: teach the keyboard this correction instead of blindly adding
+     * the suggested word to the user dictionary.
+     */
+    public boolean onCandidateLongPressed(String candidate) {
+        final String typed = mWord.getTypedWord().toString();
+        if (typed.length() < 2 || typed.equalsIgnoreCase(candidate)) {
+            return addWordToDictionary(candidate);
+        }
+        final Intent intent = new Intent(this, UkCorrectionActivity.class);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.putExtra(UkCorrectionActivity.EXTRA_TYPED, typed);
+        intent.putExtra(UkCorrectionActivity.EXTRA_CORRECT, candidate);
+        startActivity(intent);
+        return true;
+    }
+
     public boolean addWordToDictionary(String word) {
         mUserDictionary.addWord(word, 128);
         // Suggestion strip should be updated after the operation of adding word

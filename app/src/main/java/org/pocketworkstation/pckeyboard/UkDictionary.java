@@ -53,6 +53,8 @@ public class UkDictionary extends Dictionary {
      */
     private static final int MIN_AUTOCORRECT_SCORE = 2000;
     private static final int MAX_CANDIDATES = 3;
+    /** Corrections taught by the user always beat guesses from the word list. */
+    private static final int TAUGHT_SCORE = 1 << 24;
     private static final int FAR_KEY_PENALTY = 5;
     private static final int TRANSPOSITION_PENALTY = 2;
     private static final int INSERTION_PENALTY = 3;
@@ -101,12 +103,14 @@ public class UkDictionary extends Dictionary {
         return sState + "\n" + sLastCorrection + events();
     }
 
+    private final Context mContext;
     private String[] mWords = new String[0];
     private int[] mFreq = new int[0];
     private volatile boolean mLoaded;
 
     public UkDictionary(Context context) {
         final Context app = context.getApplicationContext();
+        mContext = app;
         sState = "завантажую…";
         new Thread(new Runnable() {
             @Override
@@ -220,7 +224,16 @@ public class UkDictionary extends Dictionary {
 
     @Override
     public boolean isValidWord(CharSequence word) {
-        return mLoaded && word != null && indexOf(word.toString().toLowerCase()) >= 0;
+        if (word == null) {
+            return false;
+        }
+        final String lower = word.toString().toLowerCase();
+        // A word the user marked as a typo counts as wrong even when it is in the word list:
+        // otherwise "already valid" would protect it from the correction they asked for.
+        if (UkTypoStore.correct(mContext, lower) != null) {
+            return false;
+        }
+        return mLoaded && indexOf(lower) >= 0;
     }
 
     private int indexOf(String word) {
@@ -239,6 +252,15 @@ public class UkDictionary extends Dictionary {
         }
         final String lower = typed.toString().toLowerCase();
         final int length = lower.length();
+
+        final String taught = UkTypoStore.correct(mContext, lower);
+        if (taught != null) {
+            logEvent("«" + lower + "» taught -> " + taught);
+            callback.addWord(taught.toCharArray(), 0, taught.length(), TAUGHT_SCORE,
+                    Suggest.DIC_USER, DataType.UNIGRAM);
+            return;
+        }
+
         final int known = indexOf(lower);
         if (length < 3 || length > 30 || known >= 0) {
             logEvent("«" + lower + "» len=" + length + " known=" + (known >= 0 ? "yes" : "no")

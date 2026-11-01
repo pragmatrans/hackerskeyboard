@@ -32,6 +32,12 @@
             </intent-filter>
         </activity>
 
+        <activity android:name="UkCorrectionActivity"
+                android:label="Заміна одруківки"
+                android:theme="@android:style/Theme.Dialog"
+                android:exported="false">
+        </activity>
+
         <activity android:name="LatinIMESettings" android:label="@string/english_ime_settings">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>

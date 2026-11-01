@@ -22,6 +22,7 @@ import java.util.Map;
 import android.app.Dialog;
 import android.app.backup.BackupManager;
 import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
@@ -77,13 +78,24 @@ public class LatinIMESettings extends PreferenceActivity
         mInputConnectionInfo = (Preference) findPreference(INPUT_CONNECTION_INFO);
         mLabelVersion = (Preference) findPreference("label_version");
         mUkDictStatus = findPreference("uk_dict_status");
+        final Preference corrections = findPreference("uk_corrections");
+        if (corrections != null) {
+            corrections.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
+                @Override
+                public boolean onPreferenceClick(Preference preference) {
+                    startActivity(new Intent(LatinIMESettings.this, UkCorrectionActivity.class));
+                    return true;
+                }
+            });
+        }
         if (UkDictionary.needsProbe()) {
             UkDictionary.probe(getApplicationContext());
             new Handler().postDelayed(new Runnable() {
                 @Override
                 public void run() {
                     if (mUkDictStatus != null) {
-                        mUkDictStatus.setSummary(UkDictionary.status());
+                        mUkDictStatus.setSummary(UkDictionary.status()
+                    + "\nвласних замін: " + UkTypoStore.size(this));
                     }
                 }
             }, 4000);
@@ -151,7 +163,8 @@ public class LatinIMESettings extends PreferenceActivity
 
         mLabelVersion.setSummary(version);
         if (mUkDictStatus != null) {
-            mUkDictStatus.setSummary(UkDictionary.status());
+            mUkDictStatus.setSummary(UkDictionary.status()
+                    + "\nвласних замін: " + UkTypoStore.size(this));
         }
     }
 
