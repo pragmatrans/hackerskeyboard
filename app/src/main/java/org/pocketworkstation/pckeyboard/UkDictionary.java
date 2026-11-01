@@ -17,7 +17,10 @@
 package org.pocketworkstation.pckeyboard;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
@@ -46,6 +49,10 @@ public class UkDictionary extends Dictionary {
     /** Words rarer than this are never offered as corrections. */
     private static final int MIN_FREQ = 40;
     private static final int MAX_CANDIDATES = 3;
+    /** Temporary on-screen diagnostics: no logcat on a phone-only setup. */
+    static final boolean DEBUG_TOASTS = true;
+    private static long sLastTypoToast;
+    private static boolean sLoggedLocale;
     private static final int FAR_KEY_PENALTY = 5;
     private static final int TRANSPOSITION_PENALTY = 2;
 
@@ -57,10 +64,12 @@ public class UkDictionary extends Dictionary {
     private static final Map<Character, String> sNeighbours = buildNeighbours();
 
     private final Map<String, Integer> mWords = new HashMap<String, Integer>();
+    private final Context mContext;
     private volatile boolean mLoaded;
 
     public UkDictionary(Context context) {
         final Context app = context.getApplicationContext();
+        mContext = app;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -116,11 +125,34 @@ public class UkDictionary extends Dictionary {
                 in.close();
             }
             mLoaded = true;
+            debugToast(context, "UK-dict: " + mWords.size() + " words, "
+                    + (System.currentTimeMillis() - start) + "ms");
         } catch (Exception e) {
             Log.e(TAG, "could not load " + ASSET, e);
+            debugToast(context, "UK-dict ERROR: " + e);
         }
         Log.i(TAG, "loaded " + mWords.size() + " words in "
                 + (System.currentTimeMillis() - start) + "ms");
+    }
+
+    static void debugToastOnce(Context context, final String message) {
+        if (!sLoggedLocale) {
+            sLoggedLocale = true;
+            debugToast(context, message);
+        }
+    }
+
+    static void debugToast(Context context, final String message) {
+        if (!DEBUG_TOASTS) {
+            return;
+        }
+        final Context app = context.getApplicationContext();
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                Toast.makeText(app, message, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     public boolean isLoaded() {
@@ -185,6 +217,11 @@ public class UkDictionary extends Dictionary {
                 return b.score - a.score;
             }
         });
+
+        if (!found.isEmpty() && System.currentTimeMillis() - sLastTypoToast > 2000) {
+            sLastTypoToast = System.currentTimeMillis();
+            debugToast(mContext, "typo: " + lower + " -> " + new String(found.get(0).word));
+        }
 
         for (int i = 0; i < found.size() && i < MAX_CANDIDATES; i++) {
             final Candidate candidate = found.get(i);
