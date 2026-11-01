@@ -883,7 +883,8 @@ public class LatinIME extends InputMethodService implements
             // If it's not multiline and the autoCorrect flag is not set, then
             // don't correct
             if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_AUTO_CORRECT) == 0
-                    && (attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) == 0) {
+                    && (attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_MULTI_LINE) == 0
+                    && !ukCorrectionAllowed(attribute)) {
                 mInputTypeNoAutoCorrect = true;
             }
             if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_AUTO_COMPLETE) != 0) {
@@ -915,6 +916,35 @@ public class LatinIME extends InputMethodService implements
         // If we just entered a text field, maybe it has some old text that
         // requires correction
         checkReCorrectionOnStart();
+    }
+
+    /**
+     * The Ukrainian typo dictionary is a minimal correction (one letter slipped onto a
+     * neighbouring key), so it is allowed in plain text fields even when the application
+     * did not ask for autocorrect. Sensitive fields are still left alone.
+     */
+    private boolean ukCorrectionAllowed(EditorInfo attribute) {
+        if (mUkDictionary == null || !mUkDictionary.isLoaded()) {
+            return false;
+        }
+        if ((attribute.inputType & EditorInfo.TYPE_MASK_CLASS) != EditorInfo.TYPE_CLASS_TEXT) {
+            return false;
+        }
+        if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
+            return false;
+        }
+        switch (attribute.inputType & EditorInfo.TYPE_MASK_VARIATION) {
+            case EditorInfo.TYPE_TEXT_VARIATION_EMAIL_ADDRESS:
+            case EditorInfo.TYPE_TEXT_VARIATION_URI:
+            case EditorInfo.TYPE_TEXT_VARIATION_FILTER:
+            case EditorInfo.TYPE_TEXT_VARIATION_WEB_EDIT_TEXT:
+            case EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD:
+            case EditorInfo.TYPE_TEXT_VARIATION_PASSWORD:
+            case EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD:
+                return false;
+            default:
+                return true;
+        }
     }
 
     private boolean shouldShowVoiceButton(EditorInfo attribute) {
