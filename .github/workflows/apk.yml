@@ -38,6 +38,9 @@ jobs:
           for d in "$ANDROID_HOME"/platforms/*; do
             case "$d" in */android-26) ;; *) echo "removing $d"; rm -rf "$d" ;; esac
           done
+          for d in "$ANDROID_HOME"/cmake/*; do
+            case "$d" in */3.10.2.4988404) ;; *) echo "removing $d"; rm -rf "$d" ;; esac
+          done
           ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
 
       - name: Gradle 4.10.3
