@@ -15,9 +15,21 @@ android {
             }
         }
     }
+    signingConfigs {
+        uk {
+            // Personal build key, committed on purpose: it only has to stay stable so
+            // new builds install as updates over the previous one.
+            storeFile file("../hkuk.p12")
+            storePassword "hkuk2026"
+            keyAlias "hkuk"
+            keyPassword "hkuk2026"
+            storeType "PKCS12"
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
+            signingConfig signingConfigs.uk
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
