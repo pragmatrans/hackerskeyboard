@@ -27,7 +27,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.zip.GZIPInputStream;
 
 /**
  * Offline Ukrainian dictionary and typo corrector.
@@ -37,11 +36,12 @@ import java.util.zip.GZIPInputStream;
  * adjacent letters. Candidates are ranked by corpus frequency, so "модеш" becomes "можеш"
  * and not some rare word that happens to be one key away as well.
  *
- * Word list: assets/uk_words.txt.gz, "word<TAB>freq" lines, freq = occurrences per billion.
+ * Word list: assets/uk_words.txt, "word<TAB>freq" lines, freq = occurrences per billion.
+ * Plain text, because aapt decompresses and renames *.gz assets during the build.
  */
 public class UkDictionary extends Dictionary {
     private static final String TAG = "UkDictionary";
-    private static final String ASSET = "uk_words.txt.gz";
+    private static final String ASSET = "uk_words.txt";
 
     /** Words rarer than this are never offered as corrections. */
     private static final int MIN_FREQ = 40;
@@ -102,7 +102,7 @@ public class UkDictionary extends Dictionary {
         final long start = System.currentTimeMillis();
         try {
             BufferedReader in = new BufferedReader(new InputStreamReader(
-                    new GZIPInputStream(context.getAssets().open(ASSET)), "UTF-8"));
+                    context.getAssets().open(ASSET), "UTF-8"));
             try {
                 String line;
                 while ((line = in.readLine()) != null) {

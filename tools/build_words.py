@@ -5,10 +5,10 @@ Sources:
   wordfreq (Apache-2.0) - corpus-derived frequencies, top-N vocabulary
   uk_UA hunspell (MPL 1.1) - validity filter, drops junk / proper-name noise
 
-Output: assets/uk_words.txt.gz, lines "word<TAB>freq" sorted by freq desc.
+Output: assets/uk_words.txt, lines "word<TAB>freq" sorted by freq desc.
 Freq is occurrences per billion words (int), so it fits in int32.
+Plain text on purpose: aapt silently decompresses and renames *.gz assets.
 """
-import gzip
 import re
 import sys
 
@@ -36,7 +36,7 @@ for word in top_n_list("uk", TOP_N * 3):
         break
 
 rows.sort(key=lambda r: (-r[1], r[0]))
-with gzip.open(sys.argv[1], "wt", encoding="utf-8", compresslevel=9) as f:
+with open(sys.argv[1], "w", encoding="utf-8") as f:
     for word, freq in rows:
         f.write(f"{word}\t{freq}\n")
 
