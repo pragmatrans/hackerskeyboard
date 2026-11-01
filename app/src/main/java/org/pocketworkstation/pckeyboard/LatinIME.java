@@ -37,6 +37,7 @@ import android.content.res.Resources;
 import android.content.res.XmlResourceParser;
 import android.inputmethodservice.InputMethodService;
 import android.media.AudioManager;
+import android.media.SoundPool;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -96,6 +97,7 @@ public class LatinIME extends InputMethodService implements
     private static final String PREF_VIBRATE_ON = "vibrate_on";
     static final String PREF_VIBRATE_LEN = "vibrate_len";
     private static final String PREF_SOUND_ON = "sound_on";
+    private static final String PREF_MECHANICAL_CLICK = "mechanical_click";
     private static final String PREF_POPUP_ON = "popup_on";
     private static final String PREF_AUTO_CAP = "auto_cap";
     private static final String PREF_QUICK_FIXES = "quick_fixes";
@@ -202,6 +204,9 @@ public class LatinIME extends InputMethodService implements
     private boolean mVibrateOn;
     private int mVibrateLen;
     private boolean mSoundOn;
+    private boolean mMechanicalClick;
+    private SoundPool mClickPool;
+    private int[] mClickIds;
     private boolean mPopupOn;
     private boolean mAutoCapPref;
     private boolean mAutoCapActive;
@@ -3335,6 +3340,17 @@ public class LatinIME extends InputMethodService implements
         return vol;
     }
     
+    private void initClickSounds() {
+        if (mClickPool != null) {
+            return;
+        }
+        mClickPool = new SoundPool(4, AudioManager.STREAM_SYSTEM, 0);
+        mClickIds = new int[3];
+        mClickIds[0] = mClickPool.load(this, R.raw.click_0, 1);
+        mClickIds[1] = mClickPool.load(this, R.raw.click_1, 1);
+        mClickIds[2] = mClickPool.load(this, R.raw.click_2, 1);
+    }
+
     private void playKeyClick(int primaryCode) {
         // if mAudioManager is null, we don't have the ringer state yet
         // mAudioManager will be set by updateRingerMode
@@ -3342,6 +3358,17 @@ public class LatinIME extends InputMethodService implements
             if (mKeyboardSwitcher.getInputView() != null) {
                 updateRingerMode();
             }
+        }
+        if (mSoundOn && mMechanicalClick) {
+            // Three takes of the same synthesised click, picked at random so a long word does
+            // not sound like a machine gun.
+            initClickSounds();
+            if (!mSilentMode && mClickPool != null && mClickIds != null) {
+                final int id = mClickIds[(int) (Math.random() * mClickIds.length)];
+                final float vol = Math.min(1.0f, getKeyClickVolume());
+                mClickPool.play(id, vol, vol, 1, 0, 1.0f);
+            }
+            return;
         }
         if (mSoundOn && !mSilentMode) {
             // FIXME: Volume and enable should come from UI settings
@@ -3444,6 +3471,7 @@ public class LatinIME extends InputMethodService implements
         mVibrateOn = sp.getBoolean(PREF_VIBRATE_ON, false);
         mVibrateLen = getPrefInt(sp, PREF_VIBRATE_LEN, getResources().getString(R.string.vibrate_duration_ms));
         mSoundOn = sp.getBoolean(PREF_SOUND_ON, false);
+        mMechanicalClick = sp.getBoolean(PREF_MECHANICAL_CLICK, false);
         mPopupOn = sp.getBoolean(PREF_POPUP_ON, mResources
                 .getBoolean(R.bool.default_popup_preview));
         mAutoCapPref = sp.getBoolean(PREF_AUTO_CAP, getResources().getBoolean(

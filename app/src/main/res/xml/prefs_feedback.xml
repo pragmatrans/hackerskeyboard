@@ -42,6 +42,14 @@
             android:persistent="true" 
             />
 
+    <CheckBoxPreference
+            android:key="mechanical_click"
+            android:title="Механічне клацання"
+            android:summary="Синтезоване клацання механічного перемикача замість системного звуку"
+            android:defaultValue="false"
+            android:persistent="true"
+            />
+
     <org.pocketworkstation.pckeyboard.AutoSummaryListPreference
             android:key="pref_click_method"
             android:title="@string/title_click_method"
