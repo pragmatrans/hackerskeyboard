@@ -937,13 +937,13 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         // soft shadow in the gap under the cap - this is what sells the height
         final RectF shadow = mKeyRect;
         shadow.set(inset, inset + 2.5f * mDensity, width - inset, height - inset + 0.5f * mDensity);
-        mKeyPaint.setColor(0x7A000000);
+        mKeyPaint.setColor(0x33000000);
         canvas.drawRoundRect(shadow, r, r, mKeyPaint);
 
         // the wall (what a real keycap side looks like)
         final RectF side = mKeyRect;
         side.set(inset, inset, width - inset, height - inset);
-        mKeyPaint.setColor(pressed ? 0xFF101214 : 0xFF14171A);
+        mKeyPaint.setColor(pressed ? 0xFFB9BFC9 : 0xFFC9CED8);  // wall: the cap is white
         canvas.drawRoundRect(side, r, r, mKeyPaint);
 
         // the top face, pushed down while pressed
@@ -952,18 +952,18 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         face.set(inset + 1f * mDensity, top,
                 width - inset - 1f * mDensity, height - inset - wall);
         mKeyPaint.setShader(new LinearGradient(0, face.top, 0, face.bottom,
-                pressed ? 0xFF2F353D : 0xFF5A626E,
-                pressed ? 0xFF23282E : 0xFF343A42, Shader.TileMode.CLAMP));
+                pressed ? 0xFFE3E6EC : 0xFFFFFFFF,
+                pressed ? 0xFFCED3DB : 0xFFE6E9EF, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(face, r * 0.85f, r * 0.85f, mKeyPaint);
         mKeyPaint.setShader(null);
 
         // lit top edge and a darker bottom edge: the bevel
         mKeyPaint.setStyle(Paint.Style.STROKE);
         mKeyPaint.setStrokeWidth(1f);
-        mKeyPaint.setColor(pressed ? 0x3348D0FF : 0x88FFFFFF);
+        mKeyPaint.setColor(pressed ? 0x33483A7C : 0xFFFFFFFF);
         canvas.drawLine(face.left + r * 0.7f, face.top + 1f,
                 face.right - r * 0.7f, face.top + 1f, mKeyPaint);
-        mKeyPaint.setColor(0x66000000);
+        mKeyPaint.setColor(0x33FFFFFF);
         canvas.drawLine(face.left + r * 0.7f, face.bottom - 1f,
                 face.right - r * 0.7f, face.bottom - 1f, mKeyPaint);
         mKeyPaint.setStyle(Paint.Style.FILL);
@@ -1001,7 +1001,7 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         final Paint paintHint = mPaintHint;
         // Extra symbols need to be readable at a glance, not fade into the keycap: when the
         // bevelled theme is on they get a bright accent instead of the dim grey default.
-        paintHint.setColor(mThreeDKeys ? 0xFF5FD2FF : mKeyHintColor);
+        paintHint.setColor(mThreeDKeys ? 0xFF5B2FA8 : mKeyHintColor);
         final Drawable keyBackground = mKeyBackground;
         final Rect clipRegion = mClipRegion;
         final Rect padding = mPadding;
@@ -1066,7 +1066,8 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
                 continue;
             }
             keysDrawn++;
-            paint.setColor(key.isCursor ? mKeyCursorColor : mKeyTextColor);
+            paint.setColor(mThreeDKeys && !key.isCursor ? 0xFF7C4DFF
+                    : key.isCursor ? mKeyCursorColor : mKeyTextColor);
 
             int[] drawableState = key.getCurrentDrawableState();
             keyBackground.setState(drawableState);
