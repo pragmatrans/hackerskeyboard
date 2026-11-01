@@ -928,37 +928,44 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
             }
         }
         final float r = Math.max(3f, Math.min(7f * mDensity, height * 0.16f));
-        final float wall = pressed ? 1.5f * mDensity : 3f * mDensity;
+        final float wall = pressed ? 1.5f * mDensity : 4f * mDensity;
         final float inset = 1.2f * mDensity;
 
+        mKeyPaint.setStyle(Paint.Style.FILL);
+        mKeyPaint.setShader(null);
+
+        // soft shadow in the gap under the cap - this is what sells the height
+        final RectF shadow = mKeyRect;
+        shadow.set(inset, inset + 2.5f * mDensity, width - inset, height - inset + 0.5f * mDensity);
+        mKeyPaint.setColor(0x7A000000);
+        canvas.drawRoundRect(shadow, r, r, mKeyPaint);
+
+        // the wall (what a real keycap side looks like)
         final RectF side = mKeyRect;
         side.set(inset, inset, width - inset, height - inset);
-
-        mKeyPaint.setStyle(Paint.Style.FILL);
-        mKeyPaint.setShadowLayer(0, 0, 0, 0);
-        // the wall (what a real keycap side looks like)
-        mKeyPaint.setShader(null);
-        mKeyPaint.setColor(pressed ? 0xFF15181C : 0xFF23272C);
+        mKeyPaint.setColor(pressed ? 0xFF101214 : 0xFF14171A);
         canvas.drawRoundRect(side, r, r, mKeyPaint);
 
         // the top face, pushed down while pressed
         final float top = pressed ? inset + 2f * mDensity : inset;
         final RectF face = mKeyRect;
-        face.set(inset + 0.9f * mDensity, top,
-                width - inset - 0.9f * mDensity, height - inset - wall);
+        face.set(inset + 1f * mDensity, top,
+                width - inset - 1f * mDensity, height - inset - wall);
         mKeyPaint.setShader(new LinearGradient(0, face.top, 0, face.bottom,
-                pressed ? 0xFF2C3138 : 0xFF454B54,
-                pressed ? 0xFF20242A : 0xFF2B3037, Shader.TileMode.CLAMP));
+                pressed ? 0xFF2F353D : 0xFF5A626E,
+                pressed ? 0xFF23282E : 0xFF343A42, Shader.TileMode.CLAMP));
         canvas.drawRoundRect(face, r * 0.85f, r * 0.85f, mKeyPaint);
-
-        // lit top edge + slightly darker bottom edge of the face
         mKeyPaint.setShader(null);
+
+        // lit top edge and a darker bottom edge: the bevel
         mKeyPaint.setStyle(Paint.Style.STROKE);
         mKeyPaint.setStrokeWidth(1f);
-        mKeyPaint.setColor(pressed ? 0x2248D0FF : 0x55FFFFFF);
-        canvas.drawLine(face.left + r * 0.6f, face.top, face.right - r * 0.6f, face.top, mKeyPaint);
-        mKeyPaint.setColor(0x22000000);
-        canvas.drawLine(face.left + r * 0.6f, face.bottom, face.right - r * 0.6f, face.bottom, mKeyPaint);
+        mKeyPaint.setColor(pressed ? 0x3348D0FF : 0x88FFFFFF);
+        canvas.drawLine(face.left + r * 0.7f, face.top + 1f,
+                face.right - r * 0.7f, face.top + 1f, mKeyPaint);
+        mKeyPaint.setColor(0x66000000);
+        canvas.drawLine(face.left + r * 0.7f, face.bottom - 1f,
+                face.right - r * 0.7f, face.bottom - 1f, mKeyPaint);
         mKeyPaint.setStyle(Paint.Style.FILL);
     }
 
