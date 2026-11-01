@@ -95,7 +95,7 @@ public class LatinIMESettings extends PreferenceActivity
                 public void run() {
                     if (mUkDictStatus != null) {
                         mUkDictStatus.setSummary(UkDictionary.status()
-                    + "\nвласних замін: " + UkTypoStore.size(this));
+                                + "\nвласних замін: " + UkTypoStore.size(LatinIMESettings.this));
                     }
                 }
             }, 4000);
