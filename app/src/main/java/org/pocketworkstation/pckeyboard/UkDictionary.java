@@ -67,6 +67,25 @@ public class UkDictionary extends Dictionary {
     /** Readable state for the settings screen: no logcat on a phone-only setup. */
     private static volatile String sState = "словник ще не створювався";
     private static volatile String sLastCorrection = "виправлень ще не було";
+    /** Last few decisions, newest first: typed word, whether it was known, best candidate. */
+    private static final String[] sEvents = new String[6];
+    private static int sEventsSeen;
+
+    private static synchronized void logEvent(String event) {
+        sEvents[sEventsSeen % sEvents.length] = event;
+        sEventsSeen++;
+    }
+
+    private static synchronized String events() {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 1; i <= Math.min(sEventsSeen, sEvents.length); i++) {
+            final String e = sEvents[(sEventsSeen - i) % sEvents.length];
+            if (e != null) {
+                sb.append('\n').append(e);
+            }
+        }
+        return sb.toString();
+    }
 
     /** True while nothing has tried to load the list yet in this process. */
     static boolean needsProbe() {
@@ -79,7 +98,7 @@ public class UkDictionary extends Dictionary {
     }
 
     static String status() {
-        return sState + "\n" + sLastCorrection;
+        return sState + "\n" + sLastCorrection + events();
     }
 
     private String[] mWords = new String[0];
@@ -220,7 +239,10 @@ public class UkDictionary extends Dictionary {
         }
         final String lower = typed.toString().toLowerCase();
         final int length = lower.length();
-        if (length < 3 || length > 30 || indexOf(lower) >= 0) {
+        final int known = indexOf(lower);
+        if (length < 3 || length > 30 || known >= 0) {
+            logEvent("«" + lower + "» len=" + length + " known=" + (known >= 0 ? "yes" : "no")
+                    + " -> skip");
             return;
         }
 
@@ -277,11 +299,19 @@ public class UkDictionary extends Dictionary {
             }
         });
 
-        if (found.isEmpty() || found.get(0).score < MIN_AUTOCORRECT_SCORE) {
+        if (found.isEmpty()) {
+            logEvent("«" + lower + "» known=no best=- -> skip");
+            return;
+        }
+        if (found.get(0).score < MIN_AUTOCORRECT_SCORE) {
+            logEvent("«" + lower + "» known=no best=" + new String(found.get(0).word)
+                    + "/" + found.get(0).score + " -> weak");
             return;
         }
 
         sLastCorrection = "остання заміна: " + lower + " → " + new String(found.get(0).word);
+        logEvent("«" + lower + "» known=no best=" + new String(found.get(0).word)
+                + "/" + found.get(0).score + " emit=yes");
 
         for (int i = 0; i < found.size() && i < MAX_CANDIDATES; i++) {
             final Candidate candidate = found.get(i);
