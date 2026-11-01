@@ -30,7 +30,10 @@ import android.graphics.Paint;
 import android.graphics.PorterDuffColorFilter;
 import android.graphics.Paint.Align;
 import android.graphics.PorterDuff;
+import android.graphics.LinearGradient;
 import android.graphics.Rect;
+import android.graphics.RectF;
+import android.graphics.Shader;
 import android.graphics.Region.Op;
 import android.graphics.Typeface;
 import android.graphics.drawable.Drawable;
@@ -179,6 +182,11 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
     private float mLabelScale = 1.0f;
     private int mKeyTextColor;
     private int mKeyHintColor;
+    /** Optional bevelled keycaps: rounded top face, visible side wall and a drop shadow. */
+    private boolean mThreeDKeys;
+    private Paint mKeyPaint;
+    private float mDensity;
+    private final RectF mKeyRect = new RectF();
     private int mKeyCursorColor;
     private boolean mInvertSymbols;
     private boolean mRecolorSymbols;
@@ -479,6 +487,11 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         if (!isInEditMode())
             Log.i(TAG, "Creating new LatinKeyboardBaseView " + this);
         setRenderModeIfPossible(LatinIME.sKeyboardSettings.renderMode);
+        mDensity = getResources().getDisplayMetrics().density;
+        mKeyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mThreeDKeys = android.preference.PreferenceManager
+                .getDefaultSharedPreferences(context)
+                .getBoolean("three_d_keys", false);
 
         TypedArray a = context.obtainStyledAttributes(
                 attrs, R.styleable.LatinKeyboardBaseView, defStyle, R.style.LatinKeyboardBaseView);
@@ -687,6 +700,11 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         mMiniKeyboardCacheShift.clear();
         mMiniKeyboardCacheCaps.clear();
         setRenderModeIfPossible(LatinIME.sKeyboardSettings.renderMode);
+        mDensity = getResources().getDisplayMetrics().density;
+        mKeyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mThreeDKeys = android.preference.PreferenceManager
+                .getDefaultSharedPreferences(context)
+                .getBoolean("three_d_keys", false);
         mIgnoreMove = true;
     }
     
@@ -895,6 +913,55 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         }
     }
 
+    /**
+     * Bevelled keycap: a darker wall under the key, a lit top face with a vertical gradient,
+     * a bright top edge, and a shadow that shortens while the key is pressed.
+     */
+    private void drawThreeDKey(Canvas canvas, Key key, int width, int height, int[] state) {
+        boolean pressed = false;
+        if (state != null) {
+            for (int st : state) {
+                if (st == android.R.attr.state_pressed) {
+                    pressed = true;
+                    break;
+                }
+            }
+        }
+        final float r = Math.max(3f, Math.min(7f * mDensity, height * 0.16f));
+        final float wall = pressed ? 1.5f * mDensity : 3f * mDensity;
+        final float inset = 1.2f * mDensity;
+
+        final RectF side = mKeyRect;
+        side.set(inset, inset, width - inset, height - inset);
+
+        mKeyPaint.setStyle(Paint.Style.FILL);
+        mKeyPaint.setShadowLayer(0, 0, 0, 0);
+        // the wall (what a real keycap side looks like)
+        mKeyPaint.setShader(null);
+        mKeyPaint.setColor(pressed ? 0xFF15181C : 0xFF23272C);
+        canvas.drawRoundRect(side, r, r, mKeyPaint);
+
+        // the top face, pushed down while pressed
+        final float top = pressed ? inset + 2f * mDensity : inset;
+        final RectF face = mKeyRect;
+        face.set(inset + 0.9f * mDensity, top,
+                width - inset - 0.9f * mDensity, height - inset - wall);
+        mKeyPaint.setShader(new LinearGradient(0, face.top, 0, face.bottom,
+                pressed ? 0xFF2C3138 : 0xFF454B54,
+                pressed ? 0xFF20242A : 0xFF2B3037, Shader.TileMode.CLAMP));
+        canvas.drawRoundRect(face, r * 0.85f, r * 0.85f, mKeyPaint);
+
+        // lit top edge + slightly darker bottom edge of the face
+        mKeyPaint.setShader(null);
+        mKeyPaint.setStyle(Paint.Style.STROKE);
+        mKeyPaint.setStrokeWidth(1f);
+        mKeyPaint.setColor(pressed ? 0x2248D0FF : 0x55FFFFFF);
+        canvas.drawLine(face.left + r * 0.6f, face.top, face.right - r * 0.6f, face.top, mKeyPaint);
+        mKeyPaint.setColor(0x22000000);
+        canvas.drawLine(face.left + r * 0.6f, face.bottom, face.right - r * 0.6f, face.bottom, mKeyPaint);
+        mKeyPaint.setStyle(Paint.Style.FILL);
+    }
+
     private void onBufferDraw(Canvas canvas) {
         //Log.i(TAG, "onBufferDraw called");
         if (/*mBuffer == null ||*/ mKeyboardChanged) {
@@ -917,9 +984,17 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
 
         if (mKeyboard == null) return;
 
+        // Cheap enough to re-read every draw and it makes the setting take effect without
+        // closing the keyboard.
+        mThreeDKeys = android.preference.PreferenceManager
+                .getDefaultSharedPreferences(getContext())
+                .getBoolean("three_d_keys", false);
+
         final Paint paint = mPaint;
         final Paint paintHint = mPaintHint;
-        paintHint.setColor(mKeyHintColor);
+        // Extra symbols need to be readable at a glance, not fade into the keycap: when the
+        // bevelled theme is on they get a bright accent instead of the dim grey default.
+        paintHint.setColor(mThreeDKeys ? 0xFF5FD2FF : mKeyHintColor);
         final Drawable keyBackground = mKeyBackground;
         final Rect clipRegion = mClipRegion;
         final Rect padding = mPadding;
@@ -1011,7 +1086,11 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
             if (mBackgroundAlpha != 255) {
                 keyBackground.setAlpha(mBackgroundAlpha);
             }
-            keyBackground.draw(canvas);
+            if (mThreeDKeys) {
+                drawThreeDKey(canvas, key, key.width, key.height, drawableState);
+            } else {
+                keyBackground.draw(canvas);
+            }
             if (yscale != 1.0f)  canvas.restore();
 
             boolean shouldDrawIcon = true;

@@ -75,6 +75,13 @@
             android:key="pref_render_mode"
             android:persistent="true"
             android:title="@string/title_render_mode" />
+        <CheckBoxPreference
+            android:key="three_d_keys"
+            android:title="Обʼємні клавіші"
+            android:summary="Фаска й тінь на кожній клавіші, додаткові символи — блакитним"
+            android:defaultValue="false"
+            android:persistent="true"
+            />
     </PreferenceCategory>
 
 </PreferenceScreen>
