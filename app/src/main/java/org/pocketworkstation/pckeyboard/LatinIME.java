@@ -876,7 +876,11 @@ public class LatinIME extends InputMethodService implements
             }
 
             // If NO_SUGGESTIONS is set, don't do prediction.
-            if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
+            if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0
+                    && !ukCorrectionAllowed(attribute)) {
+                // Chat apps (Discord among them) ask for no suggestions in their composer,
+                // which would switch the Ukrainian corrector off entirely. Keep it on for plain
+                // text fields; passwords, email and URLs are still excluded.
                 mPredictionOnForMode = false;
                 mInputTypeNoAutoCorrect = true;
             }
@@ -928,9 +932,6 @@ public class LatinIME extends InputMethodService implements
             return false;
         }
         if ((attribute.inputType & EditorInfo.TYPE_MASK_CLASS) != EditorInfo.TYPE_CLASS_TEXT) {
-            return false;
-        }
-        if ((attribute.inputType & EditorInfo.TYPE_TEXT_FLAG_NO_SUGGESTIONS) != 0) {
             return false;
         }
         switch (attribute.inputType & EditorInfo.TYPE_MASK_VARIATION) {

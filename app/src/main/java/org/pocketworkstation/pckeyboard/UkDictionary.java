@@ -69,6 +69,12 @@ public class UkDictionary extends Dictionary {
     /** Readable state for the settings screen: no logcat on a phone-only setup. */
     private static volatile String sState = "словник ще не створювався";
     private static volatile String sLastCorrection = "виправлень ще не було";
+    /** Last word the user typed that the list did not recognise - prefills the editor. */
+    private static volatile String sLastUnknown = "";
+
+    static String lastUnknown() {
+        return sLastUnknown;
+    }
     /** Last few decisions, newest first: typed word, whether it was known, best candidate. */
     private static final String[] sEvents = new String[6];
     private static int sEventsSeen;
@@ -262,6 +268,9 @@ public class UkDictionary extends Dictionary {
         }
 
         final int known = indexOf(lower);
+        if (length >= 3 && known < 0) {
+            sLastUnknown = lower;
+        }
         if (length < 3 || length > 30 || known >= 0) {
             logEvent("«" + lower + "» len=" + length + " known=" + (known >= 0 ? "yes" : "no")
                     + " -> skip");

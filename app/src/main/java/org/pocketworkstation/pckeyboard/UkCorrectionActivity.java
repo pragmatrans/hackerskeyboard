@@ -58,7 +58,8 @@ public class UkCorrectionActivity extends Activity {
 
         String typedExtra = getIntent().getStringExtra(EXTRA_TYPED);
         String correctExtra = getIntent().getStringExtra(EXTRA_CORRECT);
-        typed.setText(typedExtra == null ? "" : typedExtra);
+        typed.setText(typedExtra == null || typedExtra.length() == 0
+                ? UkDictionary.lastUnknown() : typedExtra);
         correct.setText(correctExtra == null ? "" : correctExtra);
 
         box.addView(label("Так я набираю (помилково):"));
