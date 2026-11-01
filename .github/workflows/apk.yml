@@ -25,10 +25,15 @@ jobs:
 
       - name: SDK / NDK / CMake
         run: |
+          export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
           echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | sdkmanager --licenses > /dev/null 2>&1 || true
-          sdkmanager --install "platforms;android-26" "build-tools;28.0.3" "ndk;19.2.5345600" "cmake;3.10.2.4988404"
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager 2>/dev/null | head -1)
+          [ -n "$SDKM" ] || { echo "no sdkmanager"; exit 1; }
+          echo "SDKM=$SDKM"
+          yes | "$SDKM" --licenses > /dev/null 2>&1 || true
+          "$SDKM" --install "platforms;android-26" "build-tools;28.0.3" "ndk;19.2.5345600" "cmake;3.10.2.4988404"
           ln -sfn "$ANDROID_HOME/ndk/19.2.5345600" "$ANDROID_HOME/ndk-bundle"
+          ls "$ANDROID_HOME/platforms" "$ANDROID_HOME/build-tools"
 
       - name: Gradle 4.10.3
         run: |
@@ -40,6 +45,7 @@ jobs:
       - name: Build
         run: |
           export JAVA_HOME=$JAVA_HOME_8_X64
+          export ANDROID_HOME=${ANDROID_HOME:-/usr/local/lib/android/sdk}
           /opt/gradle/gradle-4.10.3/bin/gradle assembleDebug --no-daemon --stacktrace
 
       - uses: actions/upload-artifact@v4
