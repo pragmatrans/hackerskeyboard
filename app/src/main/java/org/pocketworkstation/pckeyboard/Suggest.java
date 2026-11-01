@@ -312,11 +312,13 @@ public class Suggest implements Dictionary.WordCallback {
                 }
             }
             mMainDict.getWords(wordComposer, this, mNextLettersFrequencies);
+            final int beforeUk = mSuggestions.size();
             if (mUkDictionary != null) {
                 mUkDictionary.getWords(wordComposer, this, mNextLettersFrequencies);
             }
-            if ((mCorrectionMode == CORRECTION_FULL || mCorrectionMode == CORRECTION_FULL_BIGRAM)
-                    && mSuggestions.size() > 0) {
+            if (mSuggestions.size() > beforeUk
+                    || ((mCorrectionMode == CORRECTION_FULL
+                    || mCorrectionMode == CORRECTION_FULL_BIGRAM) && mSuggestions.size() > 0)) {
                 mHaveCorrection = true;
             }
         }
