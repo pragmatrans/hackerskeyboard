@@ -476,6 +476,10 @@ public class CandidateView extends View {
         }
     }
 
+    public boolean hasSuggestions() {
+        return mSuggestions != null && mSuggestions.size() > 0;
+    }
+
     private void longPressFirstWord() {
         CharSequence word = mSuggestions.get(0);
         if (word.length() < 2) return;

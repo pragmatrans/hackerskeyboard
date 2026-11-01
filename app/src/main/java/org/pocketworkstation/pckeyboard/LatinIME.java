@@ -208,6 +208,8 @@ public class LatinIME extends InputMethodService implements
     private boolean mDeadKeysActive;
     private boolean mQuickFixes;
     private boolean mShowSuggestions;
+    /** Whether the suggestion strip is allowed to be visible for the current field. */
+    private boolean mCandidatesWanted;
     private boolean mIsShowingHint;
     private boolean mConnectbotTabHack;
     private boolean mFullscreenOverride;
@@ -701,12 +703,30 @@ public class LatinIME extends InputMethodService implements
 
     @Override
     public View onCreateInputView() {
-        setCandidatesViewShown(false);  // Workaround for "already has a parent" when reconfiguring
         mKeyboardSwitcher.recreateInputView();
         mKeyboardSwitcher.makeKeyboards(true);
         mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT, 0,
                 shouldShowVoiceButton(getCurrentInputEditorInfo()));
-        return mKeyboardSwitcher.getInputView();
+
+        // The system candidates view is deprecated and Android 11+ simply does not render it,
+        // which silently killed every suggestion. The strip lives inside the input view instead:
+        // a row above the keys, hidden while it has nothing to show.
+        if (mCandidateViewContainer == null) {
+            mCandidateViewContainer = (LinearLayout) getLayoutInflater().inflate(
+                    R.layout.candidates, null);
+            mCandidateView = (CandidateView) mCandidateViewContainer.findViewById(R.id.candidates);
+            mCandidateView.setPadding(0, 0, 0, 0);
+            mCandidateView.setService(this);
+        } else if (mCandidateViewContainer.getParent() instanceof ViewGroup) {
+            ((ViewGroup) mCandidateViewContainer.getParent()).removeView(mCandidateViewContainer);
+        }
+
+        final LinearLayout input = new LinearLayout(this);
+        input.setOrientation(LinearLayout.VERTICAL);
+        input.addView(mCandidateViewContainer);
+        input.addView(mKeyboardSwitcher.getInputView());
+        mCandidateViewContainer.setVisibility(View.GONE);
+        return input;
     }
 
     @Override
@@ -728,8 +748,10 @@ public class LatinIME extends InputMethodService implements
     
     @Override
     public View onCreateCandidatesView() {
-        //Log.i(TAG, "onCreateCandidatesView(), mCandidateViewContainer=" + mCandidateViewContainer);
-        //mKeyboardSwitcher.makeKeyboards(true);
+        return null;  // the strip is part of the input view, see onCreateInputView()
+    }
+
+    private void unusedOnCreateCandidatesView() {
         if (mCandidateViewContainer == null) {
             mCandidateViewContainer = (LinearLayout) getLayoutInflater().inflate(
                     R.layout.candidates, null);
@@ -743,17 +765,22 @@ public class LatinIME extends InputMethodService implements
     }
 
     private void removeCandidateViewContainer() {
-        //Log.i(TAG, "removeCandidateViewContainer(), mCandidateViewContainer=" + mCandidateViewContainer);
-        if (mCandidateViewContainer != null) {
-            mCandidateViewContainer.removeAllViews();
-            ViewParent parent = mCandidateViewContainer.getParent();
-            if (parent != null && parent instanceof ViewGroup) {
-                ((ViewGroup) parent).removeView(mCandidateViewContainer);
-            }
-            mCandidateViewContainer = null;
-            mCandidateView = null;
+        // The strip belongs to the input view now; clearing it is enough, detaching it would
+        // leave the keyboard without a suggestion row until the service restarts.
+        if (mCandidateView != null) {
+            mCandidateView.setSuggestions(null, false, false, false);
         }
+        resetCandidateStrip();
         resetPrediction();
+    }
+
+    private void resetCandidateStrip() {
+        if (mCandidateViewContainer == null) {
+            return;
+        }
+        final boolean hasItems = mCandidateView != null && mCandidateView.hasSuggestions();
+        mCandidateViewContainer.setVisibility(
+                mCandidatesWanted && hasItems ? View.VISIBLE : View.GONE);
     }
 
     private void resetPrediction() {
@@ -1165,18 +1192,11 @@ public class LatinIME extends InputMethodService implements
         && (needsInputViewShown
                 ? mKeyboardSwitcher.getInputView().isShown()
                         : true);
-        if (visible) {
-            if (mCandidateViewContainer == null) {
-                onCreateCandidatesView();
-                setNextSuggestions();
-            }
-        } else {
-            if (mCandidateViewContainer != null) {
-                removeCandidateViewContainer();
-                commitTyped(getCurrentInputConnection(), true);
-            }
+        mCandidatesWanted = visible;
+        if (!visible) {
+            commitTyped(getCurrentInputConnection(), true);
         }
-        super.setCandidatesViewShown(visible);
+        resetCandidateStrip();
     }
 
     @Override
@@ -2548,6 +2568,7 @@ public class LatinIME extends InputMethodService implements
         if (mCandidateView != null) {
             mCandidateView.setSuggestions(suggestions, completions,
                     typedWordValid, haveMinimalSuggestion);
+            resetCandidateStrip();
         }
     }
 
