@@ -17,14 +17,12 @@
 package org.pocketworkstation.pckeyboard;
 
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
-import android.widget.Toast;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -39,22 +37,25 @@ import java.util.Map;
  * adjacent letters. Candidates are ranked by corpus frequency, so "модеш" becomes "можеш"
  * and not some rare word that happens to be one key away as well.
  *
- * Word list: assets/uk_words.txt, "word<TAB>freq" lines, freq = occurrences per billion.
- * Plain text, because aapt decompresses and renames *.gz assets during the build.
+ * Word list: assets/uk_words.txt, "word<TAB>freq" lines sorted by word, freq = occurrences
+ * per billion. Plain text, because aapt decompresses and renames *.gz assets during the
+ * build. Sorted array instead of a HashMap: a few hundred thousand words cost ~20 MB less.
  */
 public class UkDictionary extends Dictionary {
     private static final String TAG = "UkDictionary";
     private static final String ASSET = "uk_words.txt";
 
     /** Words rarer than this are never offered as corrections. */
-    private static final int MIN_FREQ = 40;
+    private static final int MIN_FREQ = 200;
+    /**
+     * Autocorrect may replace what the user typed, so the winner has to be a word that is
+     * genuinely common. Rare winners stay in the suggestion strip only.
+     */
+    private static final int MIN_AUTOCORRECT_SCORE = 2000;
     private static final int MAX_CANDIDATES = 3;
-    /** Temporary on-screen diagnostics: no logcat on a phone-only setup. */
-    static final boolean DEBUG_TOASTS = true;
-    private static long sLastTypoToast;
-    private static boolean sLoggedLocale;
     private static final int FAR_KEY_PENALTY = 5;
     private static final int TRANSPOSITION_PENALTY = 2;
+    private static final int INSERTION_PENALTY = 3;
 
     /** ЙЦУКЕН rows, used both as the substitution alphabet and to derive neighbours. */
     private static final String[] ROWS = {
@@ -63,13 +64,12 @@ public class UkDictionary extends Dictionary {
     private static final String ALPHABET = "йцукенгшщзхїфівапролджєячсмитьбюґ'";
     private static final Map<Character, String> sNeighbours = buildNeighbours();
 
-    private final Map<String, Integer> mWords = new HashMap<String, Integer>();
-    private final Context mContext;
+    private String[] mWords = new String[0];
+    private int[] mFreq = new int[0];
     private volatile boolean mLoaded;
 
     public UkDictionary(Context context) {
         final Context app = context.getApplicationContext();
-        mContext = app;
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -110,8 +110,10 @@ public class UkDictionary extends Dictionary {
     private void load(Context context) {
         final long start = System.currentTimeMillis();
         try {
+            final List<String> words = new ArrayList<String>(300000);
+            final List<Integer> freqs = new ArrayList<Integer>(300000);
             BufferedReader in = new BufferedReader(new InputStreamReader(
-                    context.getAssets().open(ASSET), "UTF-8"));
+                    context.getAssets().open(ASSET), "UTF-8"), 8192);
             try {
                 String line;
                 while ((line = in.readLine()) != null) {
@@ -119,40 +121,56 @@ public class UkDictionary extends Dictionary {
                     if (tab <= 0) {
                         continue;
                     }
-                    mWords.put(line.substring(0, tab), Integer.parseInt(line.substring(tab + 1)));
+                    words.add(line.substring(0, tab));
+                    freqs.add(Integer.parseInt(line.substring(tab + 1)));
                 }
             } finally {
                 in.close();
             }
+            // The asset is sorted by word; sort only if it is not, so we skip 240k boxed
+            // Integer allocations and a comparator pass at startup.
+            boolean sorted = true;
+            for (int i = 1; i < words.size(); i++) {
+                if (words.get(i - 1).compareTo(words.get(i)) > 0) {
+                    sorted = false;
+                    break;
+                }
+            }
+            final String[] sortedWords;
+            final int[] sortedFreq;
+            if (sorted) {
+                sortedWords = words.toArray(new String[words.size()]);
+                sortedFreq = new int[sortedWords.length];
+                for (int i = 0; i < sortedFreq.length; i++) {
+                    sortedFreq[i] = freqs.get(i);
+                }
+            } else {
+                final Integer[] order = new Integer[words.size()];
+                for (int i = 0; i < order.length; i++) {
+                    order[i] = i;
+                }
+                final List<String> w = words;
+                Arrays.sort(order, new Comparator<Integer>() {
+                    @Override
+                    public int compare(Integer a, Integer b) {
+                        return w.get(a).compareTo(w.get(b));
+                    }
+                });
+                sortedWords = new String[order.length];
+                sortedFreq = new int[order.length];
+                for (int i = 0; i < order.length; i++) {
+                    sortedWords[i] = words.get(order[i]);
+                    sortedFreq[i] = freqs.get(order[i]);
+                }
+            }
+            mWords = sortedWords;
+            mFreq = sortedFreq;
             mLoaded = true;
-            debugToast(context, "UK-dict: " + mWords.size() + " words, "
-                    + (System.currentTimeMillis() - start) + "ms");
         } catch (Exception e) {
             Log.e(TAG, "could not load " + ASSET, e);
-            debugToast(context, "UK-dict ERROR: " + e);
         }
-        Log.i(TAG, "loaded " + mWords.size() + " words in "
+        Log.i(TAG, "loaded " + mWords.length + " words in "
                 + (System.currentTimeMillis() - start) + "ms");
-    }
-
-    static void debugToastOnce(Context context, final String message) {
-        if (!sLoggedLocale) {
-            sLoggedLocale = true;
-            debugToast(context, message);
-        }
-    }
-
-    static void debugToast(Context context, final String message) {
-        if (!DEBUG_TOASTS) {
-            return;
-        }
-        final Context app = context.getApplicationContext();
-        new Handler(Looper.getMainLooper()).post(new Runnable() {
-            @Override
-            public void run() {
-                Toast.makeText(app, message, Toast.LENGTH_LONG).show();
-            }
-        });
     }
 
     public boolean isLoaded() {
@@ -161,8 +179,11 @@ public class UkDictionary extends Dictionary {
 
     @Override
     public boolean isValidWord(CharSequence word) {
-        return mLoaded && word != null
-                && mWords.containsKey(word.toString().toLowerCase());
+        return mLoaded && word != null && indexOf(word.toString().toLowerCase()) >= 0;
+    }
+
+    private int indexOf(String word) {
+        return Arrays.binarySearch(mWords, word);
     }
 
     @Override
@@ -177,7 +198,7 @@ public class UkDictionary extends Dictionary {
         }
         final String lower = typed.toString().toLowerCase();
         final int length = lower.length();
-        if (length < 3 || length > 30 || mWords.containsKey(lower)) {
+        if (length < 3 || length > 30 || indexOf(lower) >= 0) {
             return;
         }
 
@@ -211,6 +232,22 @@ public class UkDictionary extends Dictionary {
             chars[i] = left;
         }
 
+        // A dropped letter ("привт") is as common as a wrong one.
+        final char[] longer = new char[length + 1];
+        for (int i = 0; i <= length; i++) {
+            System.arraycopy(chars, 0, longer, 0, i);
+            System.arraycopy(chars, i, longer, i + 1, length - i);
+            final String before = i > 0 ? sNeighbours.get(chars[i - 1]) : null;
+            final String after = i < length ? sNeighbours.get(chars[i]) : null;
+            for (int j = 0; j < ALPHABET.length(); j++) {
+                final char candidate = ALPHABET.charAt(j);
+                longer[i] = candidate;
+                final boolean nearKey = (before != null && before.indexOf(candidate) >= 0)
+                        || (after != null && after.indexOf(candidate) >= 0);
+                addIfKnown(found, longer, nearKey ? 1 : INSERTION_PENALTY);
+            }
+        }
+
         Collections.sort(found, new Comparator<Candidate>() {
             @Override
             public int compare(Candidate a, Candidate b) {
@@ -218,9 +255,8 @@ public class UkDictionary extends Dictionary {
             }
         });
 
-        if (!found.isEmpty() && System.currentTimeMillis() - sLastTypoToast > 2000) {
-            sLastTypoToast = System.currentTimeMillis();
-            debugToast(mContext, "typo: " + lower + " -> " + new String(found.get(0).word));
+        if (found.isEmpty() || found.get(0).score < MIN_AUTOCORRECT_SCORE) {
+            return;
         }
 
         for (int i = 0; i < found.size() && i < MAX_CANDIDATES; i++) {
@@ -233,8 +269,12 @@ public class UkDictionary extends Dictionary {
     }
 
     private void addIfKnown(List<Candidate> found, char[] chars, int penalty) {
-        final Integer freq = mWords.get(new String(chars));
-        if (freq == null || freq < MIN_FREQ) {
+        final int index = indexOf(new String(chars));
+        if (index < 0) {
+            return;
+        }
+        final int freq = mFreq[index];
+        if (freq < MIN_FREQ) {
             return;
         }
         found.add(new Candidate(chars, freq / penalty));

@@ -615,7 +615,6 @@ public class LatinIME extends InputMethodService implements
         if (mUkDictionary == null && locale.startsWith("uk")) {
             mUkDictionary = new UkDictionary(this);
         }
-        UkDictionary.debugToastOnce(this, "locale=" + locale + " ukDict=" + (mUkDictionary != null));
         mSuggest.setUkrainianDictionary(mUkDictionary);
         updateAutoTextEnabled(saveLocale);
         if (mUserDictionary != null)
