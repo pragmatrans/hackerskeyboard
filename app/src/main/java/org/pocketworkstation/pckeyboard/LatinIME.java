@@ -751,19 +751,6 @@ public class LatinIME extends InputMethodService implements
         return null;  // the strip is part of the input view, see onCreateInputView()
     }
 
-    private void unusedOnCreateCandidatesView() {
-        if (mCandidateViewContainer == null) {
-            mCandidateViewContainer = (LinearLayout) getLayoutInflater().inflate(
-                    R.layout.candidates, null);
-            mCandidateView = (CandidateView) mCandidateViewContainer
-            .findViewById(R.id.candidates);
-            mCandidateView.setPadding(0, 0, 0, 0);
-            mCandidateView.setService(this);
-            setCandidatesView(mCandidateViewContainer);
-        }
-        return mCandidateViewContainer;
-    }
-
     private void removeCandidateViewContainer() {
         // The strip belongs to the input view now; clearing it is enough, detaching it would
         // leave the keyboard without a suggestion row until the service restarts.
