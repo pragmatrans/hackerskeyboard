@@ -156,6 +156,7 @@ public class LatinIME extends InputMethodService implements
     private LinearLayout mCandidateViewContainer;
     private CandidateView mCandidateView;
     private Suggest mSuggest;
+    private UkDictionary mUkDictionary;
     private CompletionInfo[] mCompletions;
 
     private AlertDialog mOptionsDialog;
@@ -611,6 +612,10 @@ public class LatinIME extends InputMethodService implements
 
         int[] dictionaries = getDictionary(orig);
         mSuggest = new Suggest(this, dictionaries);
+        if (mUkDictionary == null && locale.startsWith("uk")) {
+            mUkDictionary = new UkDictionary(this);
+        }
+        mSuggest.setUkrainianDictionary(mUkDictionary);
         updateAutoTextEnabled(saveLocale);
         if (mUserDictionary != null)
             mUserDictionary.close();

@@ -31,8 +31,9 @@ jobs:
           [ -n "$SDKM" ] || { echo "no sdkmanager"; exit 1; }
           echo "SDKM=$SDKM"
           yes | "$SDKM" --licenses > /dev/null 2>&1 || true
-          "$SDKM" --install "platforms;android-26" "build-tools;28.0.3" "ndk;19.2.5345600" "cmake;3.10.2.4988404"
-          ln -sfn "$ANDROID_HOME/ndk/19.2.5345600" "$ANDROID_HOME/ndk-bundle"
+          "$SDKM" --install "platforms;android-26" "build-tools;28.0.3" "ndk;18.1.5063045" "cmake;3.10.2.4988404"
+          ln -sfn "$ANDROID_HOME/ndk/18.1.5063045" "$ANDROID_HOME/ndk-bundle"
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk-bundle" >> $GITHUB_ENV
           # old AGP cannot parse package.xml of modern platforms; keep only android-26
           for d in "$ANDROID_HOME"/platforms/*; do
             case "$d" in */android-26) ;; *) echo "removing $d"; rm -rf "$d" ;; esac

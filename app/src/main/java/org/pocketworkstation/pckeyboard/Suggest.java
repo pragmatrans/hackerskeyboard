@@ -68,6 +68,7 @@ public class Suggest implements Dictionary.WordCallback {
     static final int LARGE_DICTIONARY_THRESHOLD = 200 * 1000;
 
     private BinaryDictionary mMainDict;
+    private UkDictionary mUkDictionary;
 
     private Dictionary mUserDictionary;
 
@@ -143,7 +144,12 @@ public class Suggest implements Dictionary.WordCallback {
     }
 
     public boolean hasMainDictionary() {
-        return mMainDict.getSize() > LARGE_DICTIONARY_THRESHOLD;
+        return mMainDict.getSize() > LARGE_DICTIONARY_THRESHOLD
+                || (mUkDictionary != null && mUkDictionary.isLoaded());
+    }
+
+    public void setUkrainianDictionary(UkDictionary dictionary) {
+        mUkDictionary = dictionary;
     }
 
     public int getApproxMaxWordLength() {
@@ -306,6 +312,9 @@ public class Suggest implements Dictionary.WordCallback {
                 }
             }
             mMainDict.getWords(wordComposer, this, mNextLettersFrequencies);
+            if (mUkDictionary != null) {
+                mUkDictionary.getWords(wordComposer, this, mNextLettersFrequencies);
+            }
             if ((mCorrectionMode == CORRECTION_FULL || mCorrectionMode == CORRECTION_FULL_BIGRAM)
                     && mSuggestions.size() > 0) {
                 mHaveCorrection = true;
@@ -508,6 +517,7 @@ public class Suggest implements Dictionary.WordCallback {
             return false;
         }
         return mMainDict.isValidWord(word)
+                || (mUkDictionary != null && mUkDictionary.isValidWord(word))
                 || (mUserDictionary != null && mUserDictionary.isValidWord(word))
                 || (mAutoDictionary != null && mAutoDictionary.isValidWord(word))
                 || (mContactsDictionary != null && mContactsDictionary.isValidWord(word));
