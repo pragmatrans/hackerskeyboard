@@ -28,6 +28,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.content.res.Resources;
 import android.os.Bundle;
+import android.os.Handler;
 import android.preference.CheckBoxPreference;
 import android.preference.ListPreference;
 import android.preference.Preference;
@@ -59,6 +60,7 @@ public class LatinIMESettings extends PreferenceActivity
     private ListPreference mKeyboardModeLandscapePreference;
     private Preference mInputConnectionInfo;
     private Preference mLabelVersion;
+    private Preference mUkDictStatus;
 
     private boolean mVoiceOn;
 
@@ -74,6 +76,18 @@ public class LatinIMESettings extends PreferenceActivity
         mSettingsKeyPreference = (ListPreference) findPreference(PREF_SETTINGS_KEY);
         mInputConnectionInfo = (Preference) findPreference(INPUT_CONNECTION_INFO);
         mLabelVersion = (Preference) findPreference("label_version");
+        mUkDictStatus = findPreference("uk_dict_status");
+        if (UkDictionary.needsProbe()) {
+            UkDictionary.probe(getApplicationContext());
+            new Handler().postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    if (mUkDictStatus != null) {
+                        mUkDictStatus.setSummary(UkDictionary.status());
+                    }
+                }
+            }, 4000);
+        }
 
 
         // TODO(klausw): remove these when no longer needed
@@ -136,6 +150,9 @@ public class LatinIMESettings extends PreferenceActivity
         }
 
         mLabelVersion.setSummary(version);
+        if (mUkDictStatus != null) {
+            mUkDictStatus.setSummary(UkDictionary.status());
+        }
     }
 
     @Override

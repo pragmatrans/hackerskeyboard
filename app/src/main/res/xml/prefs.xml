@@ -19,6 +19,13 @@
         android:title="@string/english_ime_settings"
         android:key="english_ime_settings">
 
+    <Preference
+            android:key="uk_dict_status"
+            android:title="Український словник"
+            android:persistent="false"
+            android:selectable="true"
+            />
+
     <PreferenceCategory
             android:title="@string/title_keyboard_view_settings"
             android:key="graphics_settings">

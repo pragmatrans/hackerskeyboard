@@ -64,12 +64,31 @@ public class UkDictionary extends Dictionary {
     private static final String ALPHABET = "йцукенгшщзхїфівапролджєячсмитьбюґ'";
     private static final Map<Character, String> sNeighbours = buildNeighbours();
 
+    /** Readable state for the settings screen: no logcat on a phone-only setup. */
+    private static volatile String sState = "словник ще не створювався";
+    private static volatile String sLastCorrection = "виправлень ще не було";
+
+    /** True while nothing has tried to load the list yet in this process. */
+    static boolean needsProbe() {
+        return sState.startsWith("словник ще не");
+    }
+
+    /** Loads the list just to report its state on the settings screen. */
+    static void probe(Context context) {
+        new UkDictionary(context);
+    }
+
+    static String status() {
+        return sState + "\n" + sLastCorrection;
+    }
+
     private String[] mWords = new String[0];
     private int[] mFreq = new int[0];
     private volatile boolean mLoaded;
 
     public UkDictionary(Context context) {
         final Context app = context.getApplicationContext();
+        sState = "завантажую…";
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -166,8 +185,11 @@ public class UkDictionary extends Dictionary {
             mWords = sortedWords;
             mFreq = sortedFreq;
             mLoaded = true;
-        } catch (Exception e) {
-            Log.e(TAG, "could not load " + ASSET, e);
+            sState = "завантажено " + mWords.length + " слів за "
+                    + (System.currentTimeMillis() - start) + " мс";
+        } catch (Throwable t) {
+            Log.e(TAG, "could not load " + ASSET, t);
+            sState = "ПОМИЛКА: " + t;
         }
         Log.i(TAG, "loaded " + mWords.length + " words in "
                 + (System.currentTimeMillis() - start) + "ms");
@@ -258,6 +280,8 @@ public class UkDictionary extends Dictionary {
         if (found.isEmpty() || found.get(0).score < MIN_AUTOCORRECT_SCORE) {
             return;
         }
+
+        sLastCorrection = "остання заміна: " + lower + " → " + new String(found.get(0).word);
 
         for (int i = 0; i < found.size() && i < MAX_CANDIDATES; i++) {
             final Candidate candidate = found.get(i);
