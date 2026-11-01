@@ -700,11 +700,6 @@ public class LatinKeyboardBaseView extends View implements PointerTracker.UIProx
         mMiniKeyboardCacheShift.clear();
         mMiniKeyboardCacheCaps.clear();
         setRenderModeIfPossible(LatinIME.sKeyboardSettings.renderMode);
-        mDensity = getResources().getDisplayMetrics().density;
-        mKeyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mThreeDKeys = android.preference.PreferenceManager
-                .getDefaultSharedPreferences(context)
-                .getBoolean("three_d_keys", false);
         mIgnoreMove = true;
     }
     
