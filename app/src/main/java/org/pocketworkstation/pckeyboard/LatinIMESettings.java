@@ -19,6 +19,7 @@ package org.pocketworkstation.pckeyboard;
 import java.util.HashMap;
 import java.util.Map;
 
+import android.app.AlertDialog;
 import android.app.Dialog;
 import android.app.backup.BackupManager;
 import android.content.DialogInterface;
@@ -78,6 +79,29 @@ public class LatinIMESettings extends PreferenceActivity
         mInputConnectionInfo = (Preference) findPreference(INPUT_CONNECTION_INFO);
         mLabelVersion = (Preference) findPreference("label_version");
         mUkDictStatus = findPreference("uk_dict_status");
+        final Preference lastCrash = findPreference("last_crash");
+        if (lastCrash != null) {
+            lastCrash.setSummary(firstLine(CrashLog.last(this)));
+            lastCrash.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {
+                @Override
+                public boolean onPreferenceClick(Preference preference) {
+                    new AlertDialog.Builder(LatinIMESettings.this)
+                            .setTitle("Останній збій")
+                            .setMessage(CrashLog.last(LatinIMESettings.this))
+                            .setPositiveButton("Закрити", null)
+                            .setNeutralButton("Стерти", new DialogInterface.OnClickListener() {
+                                @Override
+                                public void onClick(DialogInterface dialog, int which) {
+                                    CrashLog.clear(LatinIMESettings.this);
+                                    lastCrash.setSummary("збоїв не було");
+                                }
+                            })
+                            .show();
+                    return true;
+                }
+            });
+        }
+
         final Preference corrections = findPreference("uk_corrections");
         if (corrections != null) {
             corrections.setOnPreferenceClickListener(new Preference.OnPreferenceClickListener() {

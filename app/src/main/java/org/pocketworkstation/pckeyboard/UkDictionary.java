@@ -110,7 +110,14 @@ public class UkDictionary extends Dictionary {
     }
 
     private final Context mContext;
-    private String[] mWords = new String[0];
+    /**
+     * Every word lives in one char array with an offset table, not in 400k separate Strings.
+     * Each String costs ~40 bytes of object and array headers on top of its characters, which
+     * is ~16 MB of pure overhead at this size - enough to push a phone into an OOM crash loop
+     * when the keyboard is restarted a few times.
+     */
+    private char[] mChars = new char[0];
+    private int[] mOffsets = new int[]{0};
     private int[] mFreq = new int[0];
     private volatile boolean mLoaded;
 
@@ -158,70 +165,246 @@ public class UkDictionary extends Dictionary {
     private void load(Context context) {
         final long start = System.currentTimeMillis();
         try {
-            final List<String> words = new ArrayList<String>(300000);
-            final List<Integer> freqs = new ArrayList<Integer>(300000);
-            BufferedReader in = new BufferedReader(new InputStreamReader(
-                    context.getAssets().open(ASSET), "UTF-8"), 8192);
-            try {
-                String line;
-                while ((line = in.readLine()) != null) {
-                    final int tab = line.indexOf('\t');
-                    if (tab <= 0) {
-                        continue;
-                    }
-                    words.add(line.substring(0, tab));
-                    freqs.add(Integer.parseInt(line.substring(tab + 1)));
-                }
-            } finally {
-                in.close();
-            }
-            // The asset is sorted by word; sort only if it is not, so we skip 240k boxed
-            // Integer allocations and a comparator pass at startup.
+            final byte[] raw = readAsset(context);
+            final Builder b = new Builder(raw.length);
+            int i = 0;
             boolean sorted = true;
-            for (int i = 1; i < words.size(); i++) {
-                if (words.get(i - 1).compareTo(words.get(i)) > 0) {
-                    sorted = false;
-                    break;
-                }
-            }
-            final String[] sortedWords;
-            final int[] sortedFreq;
-            if (sorted) {
-                sortedWords = words.toArray(new String[words.size()]);
-                sortedFreq = new int[sortedWords.length];
-                for (int i = 0; i < sortedFreq.length; i++) {
-                    sortedFreq[i] = freqs.get(i);
-                }
-            } else {
-                final Integer[] order = new Integer[words.size()];
-                for (int i = 0; i < order.length; i++) {
-                    order[i] = i;
-                }
-                final List<String> w = words;
-                Arrays.sort(order, new Comparator<Integer>() {
-                    @Override
-                    public int compare(Integer a, Integer b) {
-                        return w.get(a).compareTo(w.get(b));
+            while (i < raw.length) {
+                final int wordStart = b.charsLength();
+                int ch = 0;
+                while (i < raw.length) {
+                    ch = decodeUtf8(raw, i);
+                    i += utf8Length(raw[i]);
+                    if (ch == '\t' || ch == '\n' || ch == '\r') {
+                        break;
                     }
-                });
-                sortedWords = new String[order.length];
-                sortedFreq = new int[order.length];
-                for (int i = 0; i < order.length; i++) {
-                    sortedWords[i] = words.get(order[i]);
-                    sortedFreq[i] = freqs.get(order[i]);
+                    b.addChar((char) ch);
                 }
+                if (ch != '\t') {
+                    b.truncateTo(wordStart);   // a line without a frequency: drop it
+                    if (ch == '\r' && i < raw.length && raw[i] == '\n') {
+                        i++;
+                    }
+                    continue;
+                }
+                int freq = 0;
+                boolean sawDigit = false;
+                while (i < raw.length) {
+                    ch = decodeUtf8(raw, i);
+                    i += utf8Length(raw[i]);
+                    if (ch < '0' || ch > '9') {
+                        break;
+                    }
+                    freq = freq * 10 + (ch - '0');
+                    sawDigit = true;
+                }
+                if (!sawDigit) {
+                    b.truncateTo(wordStart);
+                    continue;
+                }
+                b.endWord();
+                if (b.wordCount() > 1
+                        && compareWords(b, b.wordCount() - 2, b.wordCount() - 1) > 0) {
+                    sorted = false;
+                }
+                b.addFreq(freq);
             }
-            mWords = sortedWords;
-            mFreq = sortedFreq;
+            if (!sorted) {
+                sState = "ПОМИЛКА: список слів не відсортований";
+                Log.e(TAG, "word list is not sorted, refusing to use it");
+                return;
+            }
+            b.trim();
+            mChars = b.chars;
+            mOffsets = b.offsets;
+            mFreq = b.freqs;
             mLoaded = true;
-            sState = "завантажено " + mWords.length + " слів за "
+            sState = "завантажено " + wordCount() + " слів за "
                     + (System.currentTimeMillis() - start) + " мс";
         } catch (Throwable t) {
             Log.e(TAG, "could not load " + ASSET, t);
             sState = "ПОМИЛКА: " + t;
         }
-        Log.i(TAG, "loaded " + mWords.length + " words in "
+        Log.i(TAG, "loaded " + wordCount() + " words in "
                 + (System.currentTimeMillis() - start) + "ms");
+    }
+
+    private static byte[] readAsset(Context context) throws java.io.IOException {
+        final java.io.InputStream in = context.getAssets().open(ASSET);
+        try {
+            final java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream(1 << 21);
+            final byte[] buf = new byte[16384];
+            int n;
+            while ((n = in.read(buf)) > 0) {
+                out.write(buf, 0, n);
+            }
+            return out.toByteArray();
+        } finally {
+            in.close();
+        }
+    }
+
+    private static int utf8Length(byte first) {
+        if ((first & 0x80) == 0) {
+            return 1;
+        }
+        if ((first & 0xE0) == 0xC0) {
+            return 2;
+        }
+        return 3;
+    }
+
+    private static int decodeUtf8(byte[] raw, int i) {
+        final int b0 = raw[i] & 0xFF;
+        if (b0 < 0x80) {
+            return b0;
+        }
+        if ((b0 & 0xE0) == 0xC0 && i + 1 < raw.length) {
+            return ((b0 & 0x1F) << 6) | (raw[i + 1] & 0x3F);
+        }
+        if (i + 2 < raw.length) {
+            return ((b0 & 0x0F) << 12) | ((raw[i + 1] & 0x3F) << 6) | (raw[i + 2] & 0x3F);
+        }
+        return b0;
+    }
+
+    /** Growable staging area: the asset is read once, without a String per line. */
+    private static class Builder {
+        char[] chars;
+        int charsLen;
+        int[] offsets;
+        int[] freqs;
+        int count;
+
+        Builder(int estimated) {
+            chars = new char[estimated];
+            offsets = new int[estimated / 8 + 16];
+            freqs = new int[estimated / 8 + 16];
+            offsets[0] = 0;
+        }
+
+        void addChar(char c) {
+            if (charsLen == chars.length) {
+                chars = java.util.Arrays.copyOf(chars, chars.length * 2);
+            }
+            chars[charsLen++] = c;
+        }
+
+        int charsLength() {
+            return charsLen;
+        }
+
+        void truncateTo(int length) {
+            charsLen = length;
+        }
+
+        void endWord() {
+            if (count + 1 == offsets.length) {
+                offsets = java.util.Arrays.copyOf(offsets, offsets.length * 2);
+            }
+            offsets[++count] = charsLen;
+        }
+
+        void addFreq(int freq) {
+            if (count >= freqs.length) {
+                freqs = java.util.Arrays.copyOf(freqs, Math.max(16, freqs.length * 2));
+            }
+            freqs[count - 1] = freq;
+        }
+
+        int wordCount() {
+            return count;
+        }
+
+        /** Drops the spare capacity so the live arrays are exactly as long as the data. */
+        void trim() {
+            chars = java.util.Arrays.copyOf(chars, charsLen);
+            offsets = java.util.Arrays.copyOf(offsets, count + 1);
+            freqs = java.util.Arrays.copyOf(freqs, count);
+        }
+    }
+
+    private static int compareWords(Builder b, int first, int second) {
+        int p = b.offsets[first], end = b.offsets[first + 1];
+        int q = b.offsets[second], end2 = b.offsets[second + 1];
+        final int n = Math.min(end - p, end2 - q);
+        for (int k = 0; k < n; k++) {
+            final char a = b.chars[p + k], c = b.chars[q + k];
+            if (a != c) {
+                return a < c ? -1 : 1;
+            }
+        }
+        return (end - p) - (end2 - q);
+    }
+
+    private int wordCount() {
+        return Math.max(0, mOffsets.length - 1);
+    }
+
+    private String wordAt(int index) {
+        return new String(mChars, mOffsets[index], mOffsets[index + 1] - mOffsets[index]);
+    }
+
+    /** Compares the stored word at {@code index} with the typed one, same order as compareTo. */
+    private int compareWord(int index, String typed) {
+        int p = mOffsets[index];
+        final int end = mOffsets[index + 1];
+        final int n = end - p;
+        final int m = Math.min(n, typed.length());
+        for (int k = 0; k < m; k++) {
+            final char a = mChars[p + k], c = typed.charAt(k);
+            if (a != c) {
+                return a < c ? -1 : 1;
+            }
+        }
+        return n - typed.length();
+    }
+
+    private int compareWord(int index, char[] typed, int length) {
+        int p = mOffsets[index];
+        final int end = mOffsets[index + 1];
+        final int n = end - p;
+        final int m = Math.min(n, length);
+        for (int k = 0; k < m; k++) {
+            final char a = mChars[p + k], c = typed[k];
+            if (a != c) {
+                return a < c ? -1 : 1;
+            }
+        }
+        return n - length;
+    }
+
+    /** @return index of {@code word}, or a negative value when absent. */
+    private int findWord(String word) {
+        int lo = 0, hi = wordCount() - 1;
+        while (lo <= hi) {
+            final int mid = (lo + hi) >>> 1;
+            final int c = compareWord(mid, word);
+            if (c < 0) {
+                lo = mid + 1;
+            } else if (c > 0) {
+                hi = mid - 1;
+            } else {
+                return mid;
+            }
+        }
+        return -1;
+    }
+
+    private int findWord(char[] word, int length) {
+        int lo = 0, hi = wordCount() - 1;
+        while (lo <= hi) {
+            final int mid = (lo + hi) >>> 1;
+            final int c = compareWord(mid, word, length);
+            if (c < 0) {
+                lo = mid + 1;
+            } else if (c > 0) {
+                hi = mid - 1;
+            } else {
+                return mid;
+            }
+        }
+        return -1;
     }
 
     public boolean isLoaded() {
@@ -239,11 +422,7 @@ public class UkDictionary extends Dictionary {
         if (UkTypoStore.correct(mContext, lower) != null) {
             return false;
         }
-        return mLoaded && indexOf(lower) >= 0;
-    }
-
-    private int indexOf(String word) {
-        return Arrays.binarySearch(mWords, word);
+        return mLoaded && findWord(lower) >= 0;
     }
 
     @Override
@@ -267,7 +446,7 @@ public class UkDictionary extends Dictionary {
             return;
         }
 
-        final int known = indexOf(lower);
+        final int known = findWord(lower);
         if (length >= 3 && known < 0) {
             sLastUnknown = lower;
         }
@@ -354,7 +533,7 @@ public class UkDictionary extends Dictionary {
     }
 
     private void addIfKnown(List<Candidate> found, char[] chars, int penalty) {
-        final int index = indexOf(new String(chars));
+        final int index = findWord(chars, chars.length);
         if (index < 0) {
             return;
         }

@@ -27,6 +27,13 @@
             />
 
     <Preference
+            android:key="last_crash"
+            android:title="Останній збій"
+            android:persistent="false"
+            android:selectable="true"
+            />
+
+    <Preference
             android:key="uk_corrections"
             android:title="Мої заміни (одруківки)"
             android:summary="навчити клавіатуру вручну"
