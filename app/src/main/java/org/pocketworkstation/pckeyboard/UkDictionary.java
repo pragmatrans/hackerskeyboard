@@ -166,7 +166,19 @@ public class UkDictionary extends Dictionary {
         final long start = System.currentTimeMillis();
         try {
             final byte[] raw = readAsset(context);
-            final Builder b = new Builder(raw.length);
+            // Two exact counts up front: allocating by guesswork means a doubling copy of a
+            // multi-megabyte char array, which is exactly the spike we are trying to avoid.
+            int charCount = 0, lineCount = 0;
+            for (int k = 0; k < raw.length; k++) {
+                final byte v = raw[k];
+                if ((v & 0xC0) != 0x80) {
+                    charCount++;
+                }
+                if (v == '\n') {
+                    lineCount++;
+                }
+            }
+            final Builder b = new Builder(charCount, lineCount);
             int i = 0;
             boolean sorted = true;
             while (i < raw.length) {
@@ -276,10 +288,10 @@ public class UkDictionary extends Dictionary {
         int[] freqs;
         int count;
 
-        Builder(int estimated) {
-            chars = new char[estimated];
-            offsets = new int[estimated / 8 + 16];
-            freqs = new int[estimated / 8 + 16];
+        Builder(int charCapacity, int wordCapacity) {
+            chars = new char[charCapacity];
+            offsets = new int[wordCapacity + 1];
+            freqs = new int[Math.max(1, wordCapacity)];
             offsets[0] = 0;
         }
 

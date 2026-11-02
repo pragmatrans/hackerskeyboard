@@ -137,6 +137,12 @@ public class LatinIMESettings extends PreferenceActivity
         mVoiceOn = !(prefs.getString(VOICE_SETTINGS_KEY, mVoiceModeOff).equals(mVoiceModeOff));
     }
 
+    private static String firstLine(String text) {
+        final int newline = text.indexOf('\n');
+        final String line = newline > 0 ? text.substring(0, newline) : text;
+        return line.length() > 90 ? line.substring(0, 90) + "…" : line;
+    }
+
     @Override
     protected void onResume() {
         super.onResume();
