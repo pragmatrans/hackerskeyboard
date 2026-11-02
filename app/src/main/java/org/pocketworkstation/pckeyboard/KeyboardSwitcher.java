@@ -644,7 +644,10 @@ public class KeyboardSwitcher implements
         mInputMethodService.mHandler.post(new Runnable() {
             public void run() {
                 if (mInputView != null) {
-                    mInputMethodService.setInputView(mInputView);
+                    // Never hand the bare keyboard view to the window: the suggestion strip
+                    // wraps it, so the view must be rebuilt into that wrapper every time.
+                    mInputMethodService.setInputView(
+                            mInputMethodService.decorateInputView(mInputView));
                 }
                 mInputMethodService.updateInputViewShown();
             }

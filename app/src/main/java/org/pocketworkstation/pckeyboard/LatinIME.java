@@ -714,25 +714,44 @@ public class LatinIME extends InputMethodService implements
         mKeyboardSwitcher.setKeyboardMode(KeyboardSwitcher.MODE_TEXT, 0,
                 shouldShowVoiceButton(getCurrentInputEditorInfo()));
 
-        // The system candidates view is deprecated and Android 11+ simply does not render it,
-        // which silently killed every suggestion. The strip lives inside the input view instead:
-        // a row above the keys, hidden while it has nothing to show.
+        return decorateInputView(mKeyboardSwitcher.getInputView());
+    }
+
+    /**
+     * Puts the suggestion strip above the keys.
+     *
+     * The system candidates view is deprecated and Android 11+ does not render it at all, which
+     * silently killed every suggestion. The strip is a row inside the input view instead, hidden
+     * while it has nothing to show.
+     *
+     * A view can only have one parent, so anything still attached has to be detached first -
+     * otherwise setInputView() throws "the specified child already has a parent" and the
+     * keyboard never appears.
+     */
+    public View decorateInputView(View keyboard) {
         if (mCandidateViewContainer == null) {
             mCandidateViewContainer = (LinearLayout) getLayoutInflater().inflate(
                     R.layout.candidates, null);
             mCandidateView = (CandidateView) mCandidateViewContainer.findViewById(R.id.candidates);
             mCandidateView.setPadding(0, 0, 0, 0);
             mCandidateView.setService(this);
-        } else if (mCandidateViewContainer.getParent() instanceof ViewGroup) {
-            ((ViewGroup) mCandidateViewContainer.getParent()).removeView(mCandidateViewContainer);
         }
+        detach(mCandidateViewContainer);
+        detach(keyboard);
 
         final LinearLayout input = new LinearLayout(this);
         input.setOrientation(LinearLayout.VERTICAL);
         input.addView(mCandidateViewContainer);
-        input.addView(mKeyboardSwitcher.getInputView());
+        input.addView(keyboard);
         mCandidateViewContainer.setVisibility(View.GONE);
         return input;
+    }
+
+    private static void detach(View view) {
+        final ViewParent parent = view == null ? null : view.getParent();
+        if (parent instanceof ViewGroup) {
+            ((ViewGroup) parent).removeView(view);
+        }
     }
 
     @Override
@@ -2530,13 +2549,9 @@ public class LatinIME extends InputMethodService implements
     private void switchToKeyboardView() {
         mHandler.post(new Runnable() {
             public void run() {
-                LatinKeyboardView view = mKeyboardSwitcher.getInputView(); 
+                LatinKeyboardView view = mKeyboardSwitcher.getInputView();
                 if (view != null) {
-                    ViewParent p = view.getParent();
-                    if (p != null && p instanceof ViewGroup) {
-                        ((ViewGroup) p).removeView(view);
-                    }
-                    setInputView(mKeyboardSwitcher.getInputView());
+                    setInputView(decorateInputView(view));
                 }
                 setCandidatesViewShown(true);
                 updateInputViewShown();
