@@ -26,6 +26,13 @@
             android:selectable="true"
             />
 
+    <CheckBoxPreference
+            android:key="cmd_suggestions"
+            android:title="Підказки команд (термінал)"
+            android:summary="docker, git, apt, busybox, шляхи на кшталт /etc/ — лише коли набираєш латиницею"
+            android:defaultValue="false"
+            />
+
     <Preference
             android:key="last_crash"
             android:title="Останній збій"

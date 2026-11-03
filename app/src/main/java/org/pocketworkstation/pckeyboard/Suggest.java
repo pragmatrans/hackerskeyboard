@@ -69,6 +69,7 @@ public class Suggest implements Dictionary.WordCallback {
 
     private BinaryDictionary mMainDict;
     private UkDictionary mUkDictionary;
+    private CmdDictionary mCmdDictionary;
 
     private Dictionary mUserDictionary;
 
@@ -150,6 +151,10 @@ public class Suggest implements Dictionary.WordCallback {
 
     public void setUkrainianDictionary(UkDictionary dictionary) {
         mUkDictionary = dictionary;
+    }
+
+    public void setCommandDictionary(CmdDictionary dictionary) {
+        mCmdDictionary = dictionary;
     }
 
     public int getApproxMaxWordLength() {
@@ -320,6 +325,11 @@ public class Suggest implements Dictionary.WordCallback {
                     || ((mCorrectionMode == CORRECTION_FULL
                     || mCorrectionMode == CORRECTION_FULL_BIGRAM) && mSuggestions.size() > 0)) {
                 mHaveCorrection = true;
+            }
+            if (mCmdDictionary != null) {
+                // Shell words never trigger a correction, they are only ever offered.
+                mCmdDictionary.getWords(wordComposer.getTypedWord(), mSuggestions,
+                        mPrefMaxSuggestions);
             }
         }
         if (mOriginalWord != null) {
