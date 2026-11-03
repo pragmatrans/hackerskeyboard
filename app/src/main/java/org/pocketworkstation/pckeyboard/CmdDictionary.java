@@ -41,14 +41,22 @@ public class CmdDictionary {
     private static final int MIN_PREFIX = 2;
     private static final int MAX_TYPED_LENGTH = 40;
     private static final int MAX_PREFIX_WALK = 400;
+    /** Whole families win once the previous word names them: "git <tab>" should be git verbs. */
+    private static final int GROUP_BOOST = 3000;
+
+    /** Index in this array is the group id stored per token; 0 means "no family". */
+    private static final String[] GROUPS = {"", "git", "docker", "apt", "systemd", "net", "py"};
 
     private final Context mContext;
+    private final LatinIME mIme;
     private String[] mWords = new String[0];
     private int[] mFreq = new int[0];
+    private int[] mGroup = new int[0];
     private volatile boolean mLoaded;
 
-    public CmdDictionary(Context context) {
-        mContext = context.getApplicationContext();
+    public CmdDictionary(LatinIME ime) {
+        mIme = ime;
+        mContext = ime.getApplicationContext();
         new Thread(new Runnable() {
             @Override
             public void run() {
@@ -64,27 +72,32 @@ public class CmdDictionary {
                     new InputStreamReader(mContext.getAssets().open(ASSET), "UTF-8"));
             final List<String> words = new ArrayList<String>();
             final List<Integer> freqs = new ArrayList<Integer>();
+            final List<Integer> groups = new ArrayList<Integer>();
             String line;
             while ((line = reader.readLine()) != null) {
-                final int tab = line.indexOf('\t');
-                if (tab <= 0) {
+                final String[] parts = line.split("\t");
+                if (parts.length < 2 || parts[0].length() == 0) {
                     continue;
                 }
-                words.add(line.substring(0, tab));
+                words.add(parts[0]);
                 try {
-                    freqs.add(Integer.valueOf(line.substring(tab + 1).trim()));
+                    freqs.add(Integer.valueOf(parts[1].trim()));
                 } catch (NumberFormatException bad) {
                     freqs.add(Integer.valueOf(0));
                 }
+                groups.add(Integer.valueOf(parts.length > 2 ? groupId(parts[2].trim()) : 0));
             }
             reader.close();
             final String[] loaded = words.toArray(new String[words.size()]);
             final int[] loadedFreq = new int[loaded.length];
+            final int[] loadedGroup = new int[loaded.length];
             for (int i = 0; i < loaded.length; i++) {
                 loadedFreq[i] = freqs.get(i).intValue();
+                loadedGroup[i] = groups.get(i).intValue();
             }
             mWords = loaded;
             mFreq = loadedFreq;
+            mGroup = loadedGroup;
             mLoaded = true;
             Log.i(TAG, "loaded " + loaded.length + " commands in "
                     + (System.currentTimeMillis() - start) + "ms");
@@ -124,6 +137,8 @@ public class CmdDictionary {
             }
         }
         final String prefix = typed.toString().toLowerCase();
+        final String previous = mIme == null ? null : mIme.getPreviousWord();
+        final int wantedGroup = previous == null ? 0 : triggerGroup(previous);
         final int start = lowerBound(prefix);
         if (start < 0) {
             return 0;
@@ -143,7 +158,9 @@ public class CmdDictionary {
             if (word.equals(prefix)) {
                 continue;
             }
-            insert(bestWords, bestFreq, word, mFreq[i], max);
+            final int weight = mFreq[i] + (wantedGroup != 0 && mGroup[i] == wantedGroup
+                    ? GROUP_BOOST : 0);
+            insert(bestWords, bestFreq, word, weight, max);
         }
 
         int added = 0;
@@ -157,6 +174,42 @@ public class CmdDictionary {
             }
         }
         return added;
+    }
+
+    private static int groupId(String name) {
+        for (int i = 1; i < GROUPS.length; i++) {
+            if (GROUPS[i].equals(name)) {
+                return i;
+            }
+        }
+        return 0;
+    }
+
+    /** Maps the word before the cursor to a family, so its members are ranked first. */
+    private static int triggerGroup(String previous) {
+        if (previous.length() >= 3 && previous.startsWith("git")) {
+            return groupId("git");
+        }
+        if (previous.startsWith("docker") || previous.equals("compose")) {
+            return groupId("docker");
+        }
+        if (previous.startsWith("apt") || previous.equals("pkg") || previous.equals("dpkg")) {
+            return groupId("apt");
+        }
+        if (previous.equals("systemctl") || previous.equals("service")
+                || previous.equals("journalctl")) {
+            return groupId("systemd");
+        }
+        if (previous.equals("ssh") || previous.equals("curl") || previous.equals("wget")
+                || previous.equals("nmap") || previous.equals("ping") || previous.equals("rsync")
+                || previous.equals("scp") || previous.equals("dig")) {
+            return groupId("net");
+        }
+        if (previous.equals("python") || previous.equals("python3") || previous.equals("pip")
+                || previous.equals("pip3") || previous.equals("npm")) {
+            return groupId("py");
+        }
+        return 0;
     }
 
     private static void insert(String[] words, int[] freq, String word, int value, int max) {

@@ -752,6 +752,57 @@ public class LatinIME extends InputMethodService implements
         return input;
     }
 
+    /**
+     * The word just before the cursor, lower-cased, or null when it cannot be read.
+     *
+     * Cheap by design: one ranged IPC, no text retained. Password-ish fields are skipped outright
+     * rather than trusted to answer.
+     */
+    public String getPreviousWord() {
+        if (mCmdDictionary == null || !mCmdDictionary.isEnabled()) {
+            return null;
+        }
+        final EditorInfo info = getCurrentInputEditorInfo();
+        if (info != null) {
+            final int variation = info.inputType & EditorInfo.TYPE_MASK_VARIATION;
+            if ((info.inputType & EditorInfo.TYPE_MASK_CLASS) == EditorInfo.TYPE_CLASS_TEXT
+                    && (variation == EditorInfo.TYPE_TEXT_VARIATION_PASSWORD
+                    || variation == EditorInfo.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                    || variation == EditorInfo.TYPE_TEXT_VARIATION_WEB_PASSWORD)) {
+                return null;
+            }
+        }
+        try {
+            final InputConnection ic = getCurrentInputConnection();
+            if (ic == null) {
+                return null;
+            }
+            final CharSequence before = ic.getTextBeforeCursor(64, 0);
+            if (before == null || before.length() == 0) {
+                return null;
+            }
+            int end = before.length();
+            while (end > 0 && !isShellWordChar(before.charAt(end - 1))) {
+                end--;
+            }
+            int start = end;
+            while (start > 0 && isShellWordChar(before.charAt(start - 1))) {
+                start--;
+            }
+            if (end <= start) {
+                return null;
+            }
+            return before.subSequence(start, end).toString().toLowerCase();
+        } catch (Throwable unreadable) {
+            return null;   // some editors refuse to answer; that is a "no context", not an error
+        }
+    }
+
+    private static boolean isShellWordChar(char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9')
+                || c == '-' || c == '_' || c == '.' || c == '/';
+    }
+
     private static void detach(View view) {
         final ViewParent parent = view == null ? null : view.getParent();
         if (parent instanceof ViewGroup) {

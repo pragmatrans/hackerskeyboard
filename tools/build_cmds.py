@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Builds the shell/busybox word list for the command-line suggestion switch.
 
-Output is "token<TAB>weight", sorted by token, one per line - the same shape as the Ukrainian
-list so the IME side can stay simple.
+Output is "token<TAB>weight<TAB>group", sorted by token, one per line. The group lets the IME
+lift a whole family (git, docker, apt...) above everything else once it sees the word before the
+cursor, without any per-token bookkeeping at runtime.
 
 The weights only rank tokens against each other inside this list, so they can be small numbers
 unlike the wordfreq corpus counts used for Ukrainian.
@@ -12,6 +13,29 @@ import subprocess
 import sys
 
 TOKEN = re.compile(r"^[a-z][a-z0-9._/-]{1,23}$")
+
+# Group name is the trigger: typing it as the previous word boosts everything in that family.
+GROUPS = {
+    "git": "git", "commit": "git", "push": "git", "pull": "git", "fetch": "git",
+    "merge": "git", "rebase": "git", "clone": "git", "branch": "git", "checkout": "git",
+    "stash": "git", "status": "git", "diff": "git", "log": "git", "show": "git",
+    "remote": "git", "tag": "git", "blame": "git", "cherry-pick": "git", "reset": "git",
+    "revert": "git", "switch": "git", "restore": "git", "worktree": "git", "submodule": "git",
+    "docker": "docker", "docker-compose": "docker", "compose": "docker",
+    "apt": "apt", "apt-get": "apt", "apt-cache": "apt", "apt-mark": "apt", "pkg": "apt",
+    "dpkg": "apt", "apt-key": "apt",
+    "systemctl": "systemd", "service": "systemd", "journalctl": "systemd",
+    "nmap": "net", "ping": "net", "ping6": "net", "dig": "net", "nslookup": "net",
+    "host": "net", "whois": "net", "tcpdump": "net", "ssh": "net", "scp": "net",
+    "rsync": "net", "curl": "net", "wget": "net", "netstat": "net", "ss": "net",
+    "python": "py", "python3": "py", "pip": "py", "pip3": "py", "node": "py", "npm": "py",
+}
+
+# Tokens that belong to a family but do not trigger it themselves.
+GROUP_OF = {
+    "git-shell": "git", "git-receive-pack": "git", "git-upload-pack": "git",
+    "git-upload-archive": "git",
+}
 
 # Cross-compiler and toolchain names drown everything else when you type a single letter.
 NOISE = re.compile(r"(aarch64|x86_64|i686|arm-linux|linux-gnu|ctx-|pkg-config-)")
@@ -86,7 +110,8 @@ def main():
     path = sys.argv[1] if len(sys.argv) > 1 else "app/src/main/assets/cmd_words.txt"
     with open(path, "w", encoding="utf-8") as out:
         for token, weight in rows:
-            out.write("%s\t%d\n" % (token, weight))
+            group = GROUPS.get(token) or GROUP_OF.get(token) or ""
+            out.write("%s\t%d\t%s\n" % (token, weight, group))
     print("wrote %d tokens to %s" % (len(rows), path))
 
 
